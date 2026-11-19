@@ -4,3 +4,7 @@
 .view-tabs button{border:0;background:transparent;color:var(--muted);padding:7px 12px;border-radius:8px;font-size:13px;font-weight:700}
 .view-tabs button.active{background:var(--lime);color:#15180f}
 @media(max-width:620px){.view-tabs{width:100%;justify-content:stretch}.view-tabs button{flex:1}}
+
+#exportImage{background:#252a35}
+#exportImage:disabled{opacity:.6;cursor:wait}
+@media(max-width:620px){.top .filterrow{width:100%}.top .filterrow button{flex:1}}
