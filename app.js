@@ -17,7 +17,7 @@ function imageCandidates(r){
  // Rplus stores the original game-master asset filename in fn/aa_fn.
  for(const field of [r.fn,r.aa_fn]){
   if(typeof field==='string'&&field.trim()){
-   const match=field.trim().match(/pm\\d+([._][A-Za-z0-9_.-]+)$/i);
+   const match=field.trim().match(/pm\d+([._][A-Za-z0-9_.-]+)$/i);
    if(match)add(id+match[1]+'.s.icon.png');
   }
  }
