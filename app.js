@@ -10,12 +10,34 @@ function isShadow(r){return /shadow/i.test((r.family||'')+' '+(r.name_suffix||''
 function isLegend(r){return legendary.has(+r.dex)}
 function isReleased(r){return r.shiny_released===true || !!r.released_date || !!r.debut}
 function key(r){return [r.dex,r.family||'',r.isotope||'',r.type||'',r.fn||'',r.aa_fn||'',r.name_suffix||''].join('|')}
-function imageUrl(r){
- const dex=String(r.dex);
- const base='https://raw.githubusercontent.com/PokeMiners/pogo_assets/master/Images/Pokemon%20-%20256x256/Addressable%20Assets/pm'+dex;
- // Pokémon GO's actual in-game 256px shiny icon.
- return base+'.s.icon.png';
+const ASSET_BASE='https://raw.githubusercontent.com/PokeMiners/pogo_assets/master/Images/Pokemon%20-%20256x256/Addressable%20Assets/';
+function imageCandidates(r){
+ const dex=String(r.dex),id='pm'+dex,candidates=[];
+ const add=name=>{if(name&&!candidates.includes(name))candidates.push(name)};
+ // Rplus stores the original game-master asset filename in fn/aa_fn.
+ for(const field of [r.fn,r.aa_fn]){
+  if(typeof field==='string'&&field.trim()){
+   const match=field.trim().match(/pm\\d+([._][A-Za-z0-9_.-]+)$/i);
+   if(match)add(id+match[1]+'.s.icon.png');
+  }
+ }
+ // Explicit form assets: Mega, regional and other named forms.
+ if(r.type==='_51')add(id+'.fMEGA_X.s.icon.png');
+ if(r.type==='_52')add(id+'.fMEGA_Y.s.icon.png');
+ if(r.type&&r.type!=='_51'&&r.type!=='_52')add(id+'.f'+r.type.replace(/^_+/,'').toUpperCase()+'.s.icon.png');
+ const family=String(r.family||'');
+ const suffix=family.match(/_([a-z][a-z0-9_]*)$/i);
+ if(suffix){
+  const code=suffix[1].toUpperCase();
+  const known={F19:'FALL_2019',F20:'FALL_2020',G19:'GO_FEST_2019'};
+  if(known[code])add(id+'.f'+known[code]+'.s.icon.png');
+  if(/^(ALOLA|GALARIAN|HISUIAN|PALDEAN|PALDEA|MEGA|PRIMAL|ORIGIN|THERIAN|SKY|ALTERED|INCARNATE|WHITE|BLACK|ASH|DUSK|DAWN|MIDDAY|MIDNIGHT|BLOODMOON|PALDEA_AQUA|PALDEA_BLAZE|PALDEA_COMBAT)$/.test(code))add(id+'.f'+code+'.s.icon.png');
+ }
+ // Base shiny icon is last resort only, never the first choice for a form.
+ add(id+'.s.icon.png');
+ return candidates.map(file=>ASSET_BASE+file);
 }
+function imageUrl(r){return imageCandidates(r)[0]}
 function variantId(r){
  const parts=[r.isotope,r.type,r.name_suffix,r.fn,r.aa_fn].filter(v=>v&&String(v).trim());
  return parts.length?parts.map(v=>String(v).replace(/[^a-zA-Z0-9_-]+/g,'_')).join('__'):'default';
@@ -27,7 +49,7 @@ function parseCsvLine(line){
 }
 function persist(){localStorage.setItem('shiny-scout-owned',JSON.stringify([...owned]));render()}
 function matches(r){if(!isReleased(r))return false;const q=$('search').value.trim().toLowerCase();const text=(label(r)+' '+(r.family||'')+' '+(r.name_suffix||'')+' '+r.dex).toLowerCase();if(q&&!text.includes(q))return false;const g=$('generation').value;if(g&&gen(+r.dex)!==+g)return false;const k=$('kind').value;if(k==='legendary'&&!isLegend(r))return false;if(k==='shadow'&&!isShadow(r))return false;if(k==='mega'&&!isMega(r))return false;if(k==='variant'&&!isVariant(r))return false;if($('wild').checked&&r.found_wild===false)return false;if($('variants').value==='exclude'&&isVariant(r))return false;if($('shadows').value==='exclude'&&isShadow(r))return false;if($('megas').value==='exclude'&&isMega(r))return false;const collected=owned.has(key(r));if(view==='missing'&&collected)return false;if(view==='collected'&&!collected)return false;return true}
-function render(){let list=rows.filter(matches);if($('sort').value==='name')list.sort((a,b)=>label(a).localeCompare(label(b)));else if($('sort').value==='recent')list.sort((a,b)=>(Date.parse(b.released_date||b.debut||'')||0)-(Date.parse(a.released_date||a.debut||'')||0));else list.sort((a,b)=>a.dex-b.dex);$('total').textContent=list.length.toLocaleString();$('caught').textContent=owned.size.toLocaleString();const all=rows.filter(isReleased);const pct=all.length?Math.round(owned.size/all.length*100):0;$('percent').textContent=pct+'%';$('bar').style.width=Math.min(100,pct)+'%';$('resultCount').textContent=list.length.toLocaleString()+' Pokémon';$('resultSub').textContent=view==='missing'?'Tap a Pokémon to mark it collected.':view==='collected'?'Tap a collected Pokémon to move it back to missing.':'Tap any Pokémon to update its collection status.';document.querySelectorAll('[data-view]').forEach(b=>b.classList.toggle('active',b.dataset.view===view));const grid=$('grid');grid.innerHTML='';if(!list.length){grid.innerHTML='<div class="empty">No Pokémon match these filters.<br>Try changing your search or filters.</div>';return}const frag=document.createDocumentFragment();for(const r of list){const k=key(r),yes=owned.has(k),card=document.createElement('button');card.className='card'+(yes?' owned':'');card.setAttribute('aria-label',(yes?'Unmark ':'Mark ')+label(r));const sprite=document.createElement('div');sprite.className='sprite';const img=document.createElement('img');img.loading='lazy';img.alt='';img.src=imageUrl(r);img.onerror=()=>{img.onerror=null;img.src='https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/'+r.dex+'.png'};sprite.append(img);const dex=document.createElement('div');dex.className='dex';dex.textContent='#'+String(r.dex).padStart(4,'0')+' · Gen '+gen(+r.dex);const nm=document.createElement('div');nm.className='name';nm.textContent=label(r);const form=document.createElement('div');form.className='form';form.textContent=(r.name_suffix||'').replace(/[()]/g,'')+(isVariant(r)?' Variant':'');const tag=document.createElement('div');tag.className='tag';tag.textContent=yes?'✓ Collected':(isLegend(r)?'Legendary / Mythical':isMega(r)?'Mega form':isShadow(r)?'Shadow':r.released_date?'Shiny released':'Shiny variant');const check=document.createElement('span');check.className='check';check.textContent=yes?'✓':'+';card.append(check,sprite,dex,nm,form,tag);card.addEventListener('click',()=>{owned.has(k)?owned.delete(k):owned.add(k);persist()});frag.append(card)}grid.append(frag)}
+function render(){let list=rows.filter(matches);if($('sort').value==='name')list.sort((a,b)=>label(a).localeCompare(label(b)));else if($('sort').value==='recent')list.sort((a,b)=>(Date.parse(b.released_date||b.debut||'')||0)-(Date.parse(a.released_date||a.debut||'')||0));else list.sort((a,b)=>a.dex-b.dex);$('total').textContent=list.length.toLocaleString();$('caught').textContent=owned.size.toLocaleString();const all=rows.filter(isReleased);const pct=all.length?Math.round(owned.size/all.length*100):0;$('percent').textContent=pct+'%';$('bar').style.width=Math.min(100,pct)+'%';$('resultCount').textContent=list.length.toLocaleString()+' Pokémon';$('resultSub').textContent=view==='missing'?'Tap a Pokémon to mark it collected.':view==='collected'?'Tap a collected Pokémon to move it back to missing.':'Tap any Pokémon to update its collection status.';document.querySelectorAll('[data-view]').forEach(b=>b.classList.toggle('active',b.dataset.view===view));const grid=$('grid');grid.innerHTML='';if(!list.length){grid.innerHTML='<div class="empty">No Pokémon match these filters.<br>Try changing your search or filters.</div>';return}const frag=document.createDocumentFragment();for(const r of list){const k=key(r),yes=owned.has(k),card=document.createElement('button');card.className='card'+(yes?' owned':'');card.setAttribute('aria-label',(yes?'Unmark ':'Mark ')+label(r));const sprite=document.createElement('div');sprite.className='sprite';const img=document.createElement('img');img.loading='lazy';img.alt='';const candidates=imageCandidates(r);let imageIndex=0;const loadNextImage=()=>{if(imageIndex<candidates.length){img.src='https://images.weserv.nl/?url='+encodeURIComponent(candidates[imageIndex++])+'&w=112&h=112&fit=contain&output=webp&q=76';}else{img.onerror=null;img.src='https://images.weserv.nl/?url='+encodeURIComponent('https://raw.githubusercontent.com/PokeAPI/sprites/master/sprites/pokemon/'+r.dex+'.png')+'&w=112&h=112&fit=contain&output=webp&q=76';}};img.onerror=loadNextImage;loadNextImage();sprite.append(img);const dex=document.createElement('div');dex.className='dex';dex.textContent='#'+String(r.dex).padStart(4,'0')+' · Gen '+gen(+r.dex);const nm=document.createElement('div');nm.className='name';nm.textContent=label(r);const form=document.createElement('div');form.className='form';form.textContent=(r.name_suffix||'').replace(/[()]/g,'')+(isVariant(r)?' Variant':'');const tag=document.createElement('div');tag.className='tag';tag.textContent=yes?'✓ Collected':(isLegend(r)?'Legendary / Mythical':isMega(r)?'Mega form':isShadow(r)?'Shadow':r.released_date?'Shiny released':'Shiny variant');const check=document.createElement('span');check.className='check';check.textContent=yes?'✓':'+';card.append(check,sprite,dex,nm,form,tag);card.addEventListener('click',()=>{owned.has(k)?owned.delete(k):owned.add(k);persist()});frag.append(card)}grid.append(frag)}
 async function fetchLatest(url){const freshUrl=url+(url.includes('?')?'&':'?')+'_='+Date.now();return fetch(freshUrl,{cache:'no-store'});}\nasync function init(){try{$('status').textContent='Fetching the latest shiny data from Rplus…';const [dataRes,nameRes]=await Promise.all([fetchLatest(DATA_URL),fetchLatest(NAME_URL).catch(()=>null)]);if(!dataRes||!dataRes.ok)throw new Error('Dataset request failed ('+(dataRes?dataRes.status:'network error')+')');const raw=await dataRes.json();if(!Array.isArray(raw))throw new Error('The shiny dataset returned an unexpected format');if(nameRes&&nameRes.ok){const csv=await nameRes.text();for(const line of csv.split(/\r?\n/).slice(1)){const c=parseCsvLine(line);if(c.length>7&&/^\d+$/.test(c[0]))nameMap[+c[0]]=c[7].trim()}}rows=raw.filter(r=>r&&Number.isFinite(+r.dex)&&+r.dex>0&&isReleased(r));
 // Explicit Halloween 2026 additions announced after the upstream snapshot.
 rows.push(
