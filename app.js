@@ -17,9 +17,8 @@ function imageUrl(r){
  return base+'.s.icon.png';
 }
 function variantId(r){
- const parts=[r.isotope,r.type,r.name_suffix,r.fn,r.aa_fn];
- const id=parts.find(v=>v&&String(v).trim());
- return id?String(id).replace(/[^a-zA-Z0-9_-]+/g,'_'):'default';
+ const parts=[r.isotope,r.type,r.name_suffix,r.fn,r.aa_fn].filter(v=>v&&String(v).trim());
+ return parts.length?parts.map(v=>String(v).replace(/[^a-zA-Z0-9_-]+/g,'_')).join('__'):'default';
 }
 function parseCsvLine(line){
  const out=[];let value='',quoted=false;
