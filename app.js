@@ -99,4 +99,25 @@ async function importList(file){
   $('status').textContent='Full collected list imported successfully.';
  }else throw new Error('Unsupported JSON format');
 }
+
+async function exportCurrentViewImage(){
+ const button=$('exportImage'),grid=$('grid');
+ if(!window.html2canvas){$('status').textContent='Image exporter is still loading. Try again in a moment.';return}
+ const oldText=button.textContent;button.disabled=true;button.textContent='Preparing image…';
+ try{
+  // Force visible sprites to finish loading before rasterizing the current filtered grid.
+  const images=[...grid.querySelectorAll('img')];
+  await Promise.all(images.map(img=>{img.loading='eager';if(img.complete&&img.naturalWidth)return Promise.resolve();return new Promise(resolve=>{img.addEventListener('load',resolve,{once:true});img.addEventListener('error',resolve,{once:true});setTimeout(resolve,10000)})}));
+  const canvas=await html2canvas(grid,{backgroundColor:'#101218',scale:1.25,useCORS:true,allowTaint:false,logging:false});
+  const blob=await new Promise(resolve=>canvas.toBlob(resolve,'image/jpeg',0.78));
+  if(!blob)throw new Error('Could not encode the image');
+  const url=URL.createObjectURL(blob),a=document.createElement('a');
+  a.href=url;a.download='shiny-scout-current-view.jpg';a.click();
+  setTimeout(()=>URL.revokeObjectURL(url),1500);
+  $('status').textContent='Current view exported as a compact JPEG ('+(blob.size/1024).toFixed(0)+' KB).';
+ }catch(err){$('status').textContent='Image export failed: '+err.message}
+ finally{button.disabled=false;button.textContent=oldText}
+}
+$('exportImage').addEventListener('click',exportCurrentViewImage);
+
 $('export').onclick=exportList;$('importBtn').onclick=()=>$('importFile').click();$('importFile').onchange=async e=>{try{const file=e.target.files[0];if(file)await importList(file)}catch(err){alert('Could not import this list: '+err.message)}finally{e.target.value=''}};$('clear').onclick=()=>{if(confirm('Clear all collected marks saved in this browser?')){owned.clear();persist()}};init();
