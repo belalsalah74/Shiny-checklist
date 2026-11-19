@@ -17,8 +17,13 @@ function imageCandidates(r){
  // Rplus stores the original game-master asset filename in fn/aa_fn.
  for(const field of [r.fn,r.aa_fn]){
   if(typeof field==='string'&&field.trim()){
-   const match=field.trim().match(/pm\d+([._][A-Za-z0-9_.-]+)$/i);
-   if(match)add(id+match[1]+'.s.icon.png');
+   const value=field.trim();
+   const match=value.match(/pm\d+([._][A-Za-z0-9_.-]+)$/i);
+   if(match){
+    let suffix=match[1];
+    if(suffix.startsWith('_')&&/_pgo_/i.test(suffix))suffix='.f'+suffix.split(/_pgo_/i).pop().replace(/[^a-z0-9]+/gi,'_').toUpperCase();
+    add(id+suffix+'.s.icon.png');
+   }
   }
  }
  // Explicit form assets: Mega, regional and other named forms.
