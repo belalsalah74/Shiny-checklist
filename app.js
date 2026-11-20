@@ -67,7 +67,7 @@ rows.push(
 const seen=new Set();rows=rows.filter(r=>{const k=key(r);if(seen.has(k))return false;seen.add(k);return true});const genSel=$('generation');for(let i=1;i<=9;i++){const o=document.createElement('option');o.value=i;o.textContent=["Kanto","Johto","Hoenn","Sinnoh","Unova","Kalos","Alola","Galar","Paldea"][i-1];genSel.append(o)}$('status').textContent='Loaded '+rows.length.toLocaleString()+' released shiny entries from Rplus. Filters are ready.';render()}catch(e){$('status').textContent='Could not load shiny data. Check your internet connection or try again later. ('+e.message+')';$('grid').innerHTML='<div class="empty">Data could not be loaded. The source dataset is hosted on GitHub.</div>'}}
 ['search','generation','kind','wild','variants','shadows','megas','sort'].forEach(id=>$(id).addEventListener('input',render));document.querySelectorAll('[data-view]').forEach(b=>b.addEventListener('click',()=>{view=b.dataset.view;render()}));const mythical=new Set([151,251,385,386,489,490,491,492,493,494,647,648,649,719,720,721,801,802,807,808,809,893,1025]);
 function isMythical(r){return mythical.has(+r.dex)}
-function isDmax(r){return /dynamax|gigantamax|gmax|dmax/i.test([r.family,r.name_suffix,r.type,r.form,r.tag].filter(Boolean).join(' '))}
+function isDmax(r){return !!(r.is_dynamax||r.is_gigantamax||r.dynamax||r.gigantamax)||/dynamax|gigantamax|gmax|dmax/i.test([r.family,r.name_suffix,r.type,r.form,r.tag].filter(Boolean).join(' '))}
 function customVariantName(r){
  const raw=String(r.family||r.name_suffix||r.form||'').trim();
  let name=raw.replace(/^.*?\s\(/,'').replace(/\)$/,'').trim();
@@ -94,7 +94,7 @@ function exportList(){
 }
 async function importList(file){
  const data=JSON.parse(await file.text());
- if(data.pokemon&&typeof data.pokemon==='object'){
+ if(data.pokemon&&typeof data.pokemon==='object'&&Object.values(data.pokemon).some(entry=>entry&&typeof entry==='object'&&('original' in entry||'legendary' in entry||'mythical' in entry||'gen' in entry))){
   let changed=0;
   for(const [dex,entry] of Object.entries(data.pokemon)){
    if(!entry||typeof entry!=='object')continue;
