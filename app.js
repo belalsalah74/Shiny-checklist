@@ -65,38 +65,66 @@ rows.push(
  {dex:972,family:'Houndstone (Shiny evolution — Halloween 2026)',shiny_released:true,isotope:'_2026_SHINY_DEBUT',released_date:'2026/11/01',event:'Halloween 2026',found_wild:false}
 );
 const seen=new Set();rows=rows.filter(r=>{const k=key(r);if(seen.has(k))return false;seen.add(k);return true});const genSel=$('generation');for(let i=1;i<=9;i++){const o=document.createElement('option');o.value=i;o.textContent=["Kanto","Johto","Hoenn","Sinnoh","Unova","Kalos","Alola","Galar","Paldea"][i-1];genSel.append(o)}$('status').textContent='Loaded '+rows.length.toLocaleString()+' released shiny entries from Rplus. Filters are ready.';render()}catch(e){$('status').textContent='Could not load shiny data. Check your internet connection or try again later. ('+e.message+')';$('grid').innerHTML='<div class="empty">Data could not be loaded. The source dataset is hosted on GitHub.</div>'}}
-['search','generation','kind','wild','variants','shadows','megas','sort'].forEach(id=>$(id).addEventListener('input',render));document.querySelectorAll('[data-view]').forEach(b=>b.addEventListener('click',()=>{view=b.dataset.view;render()}));function exportList(){
+['search','generation','kind','wild','variants','shadows','megas','sort'].forEach(id=>$(id).addEventListener('input',render));document.querySelectorAll('[data-view]').forEach(b=>b.addEventListener('click',()=>{view=b.dataset.view;render()}));const mythical=new Set([151,251,385,386,489,490,491,492,493,494,647,648,649,719,720,721,801,802,807,808,809,893,1025]);
+function isMythical(r){return mythical.has(+r.dex)}
+function isDmax(r){return /dynamax|gigantamax|gmax|dmax/i.test([r.family,r.name_suffix,r.type,r.form,r.tag].filter(Boolean).join(' '))}
+function customVariantName(r){
+ const raw=String(r.family||r.name_suffix||r.form||'').trim();
+ let name=raw.replace(/^.*?\s\(/,'').replace(/\)$/,'').trim();
+ if(!name||name===label(r))name=String(r.name_suffix||r.type||'Special form').replace(/^[_ .-]+/,'').replace(/[_-]+/g,' ').trim();
+ return name||'Special form';
+}
+function exportList(){
  const pokemon={};
  for(const r of rows){
   const dex=String(r.dex);
-  if(!pokemon[dex])pokemon[dex]={name:label(r),variant:{}};
-  pokemon[dex].variant[variantId(r)]=owned.has(key(r));
+  if(!pokemon[dex]){
+   pokemon[dex]={name:label(r),legendary:isLegend(r)&&!isMythical(r),mythical:isMythical(r),gen:gen(+r.dex),wild:rows.some(x=>+x.dex===+r.dex&&x.found_wild===true),original:false,variant:{shadow:false,mega:false,dmax:false}};
+  }
+  const entry=pokemon[dex],collected=owned.has(key(r));
+  if(isShadow(r))entry.variant.shadow=collected;
+  else if(isMega(r))entry.variant.mega=collected;
+  else if(isDmax(r))entry.variant.dmax=collected;
+  else if(isVariant(r))entry.variant[customVariantName(r)]=collected;
+  else entry.original=collected;
  }
- const payload={format:'shiny-scout-list',version:1,exportedAt:new Date().toISOString(),pokemon};
+ const payload={pokemon};
  const blob=new Blob([JSON.stringify(payload,null,2)],{type:'application/json'});
  const url=URL.createObjectURL(blob);const a=document.createElement('a');a.href=url;a.download='shiny-scout-list.json';a.click();URL.revokeObjectURL(url);
 }
 async function importList(file){
  const data=JSON.parse(await file.text());
- if(data.format==='shiny-scout-list'&&data.pokemon&&typeof data.pokemon==='object'){
-  // Apply only the variants explicitly present in the file. True adds to Collected;
-  // false removes from Collected. Unlisted Pokémon/variants keep their current state.
+ if(data.pokemon&&typeof data.pokemon==='object'){
   let changed=0;
   for(const [dex,entry] of Object.entries(data.pokemon)){
-   if(!entry||!entry.variant||typeof entry.variant!=='object')continue;
-   for(const r of rows){
-    if(String(r.dex)!==String(dex))continue;
-    const id=variantId(r);
-    if(!Object.prototype.hasOwnProperty.call(entry.variant,id))continue;
-    const k=key(r),value=entry.variant[id];
-    if(value===true){if(!owned.has(k)){owned.add(k);changed++;}}
-    else if(value===false){if(owned.delete(k))changed++;}
+   if(!entry||typeof entry!=='object')continue;
+   const speciesRows=rows.filter(r=>String(r.dex)===String(dex));
+   const setStatus=(matches,value)=>{
+    if(typeof value!=='boolean')return;
+    for(const r of matches){const k=key(r),before=owned.has(k);if(value&&!before){owned.add(k);changed++}else if(!value&&before){owned.delete(k);changed++}}
+   };
+   if(typeof entry.original==='boolean')setStatus(speciesRows.filter(r=>!isShadow(r)&&!isMega(r)&&!isDmax(r)&&!isVariant(r)),entry.original);
+   if(entry.variant&&typeof entry.variant==='object'){
+    for(const [variant,value] of Object.entries(entry.variant)){
+     if(variant==='shadow')setStatus(speciesRows.filter(isShadow),value);
+     else if(variant==='mega')setStatus(speciesRows.filter(isMega),value);
+     else if(variant==='dmax')setStatus(speciesRows.filter(isDmax),value);
+     else setStatus(speciesRows.filter(r=>isVariant(r)&&customVariantName(r)===variant),value);
+    }
    }
   }
   persist();$('status').textContent='Import applied: '+changed+' collection status changes. Unlisted entries were left unchanged.';
+ }else if(data.format==='shiny-scout-list'&&data.pokemon&&typeof data.pokemon==='object'){
+  // Compatibility with the earlier Shiny Scout JSON format.
+  let changed=0;
+  for(const [dex,entry] of Object.entries(data.pokemon))for(const r of rows){
+   if(String(r.dex)!==String(dex)||!entry?.variant)continue;
+   const id=variantId(r);if(!Object.prototype.hasOwnProperty.call(entry.variant,id))continue;
+   const value=entry.variant[id],k=key(r);if(value===true&&!owned.has(k)){owned.add(k);changed++}else if(value===false&&owned.delete(k))changed++;
+  }
+  persist();$('status').textContent='Older Shiny Scout list imported: '+changed+' collection status changes.';
  }else if(Array.isArray(data.owned)){
-  owned=new Set(data.owned.filter(k=>typeof k==='string'));persist();
-  $('status').textContent='Full collected list imported successfully.';
+  owned=new Set(data.owned.filter(k=>typeof k==='string'));persist();$('status').textContent='Legacy collected list imported successfully.';
  }else throw new Error('Unsupported JSON format');
 }
 
